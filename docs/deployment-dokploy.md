@@ -128,8 +128,30 @@ exits deliberately when migrations fail so a half-migrated schema never serves
 traffic. It also aborts after `DB_WAIT_ATTEMPTS` (default 30 × 2s) if the
 database never becomes reachable.
 
-**Domain returns 502** — confirm the domain targets service `app` port `80`, and
-that `app` reports `healthy` in `docker compose ps`.
+**Domain returns 502 / 504 while `app` is healthy** — this is Traefik failing to
+reach a container that is running fine. `app` holds an IP on both `internal` and
+`dokploy-network`, and Traefik only sits on the latter; if it resolves the
+`internal` address, every request times out at the proxy. The
+`traefik.docker.network=dokploy-network` label on the `app` service pins the
+right one. Confirm the label survived into the running container:
+
+```bash
+docker inspect <app-container> --format '{{ index .Config.Labels "traefik.docker.network" }}'
+```
+
+If it is empty, Dokploy replaced the labels rather than merging them. Fall back
+to putting all three services on `dokploy-network` alone and deleting the
+`internal` network — but then rename `db` to something project-specific, because
+service names become DNS aliases on that shared network and a generic `db` can
+collide with another Dokploy app's database.
+
+Also confirm the domain targets service `app` port `80`, and that `app` reports
+`healthy` in `docker compose ps`.
+
+**Behind Cloudflare Tunnel** — leave the HTTPS toggle off in the Dokploy domain
+(Cloudflare terminates TLS) and point the tunnel's public hostname at
+`http://localhost:80`, where Traefik listens. Pointing it at `https://localhost:443`
+yields a 502 because no TLS router exists for the host.
 
 **OCR verification times out on the first request** — if the build-time model
 prefetch failed (the build log prints a `WARNING` rather than
