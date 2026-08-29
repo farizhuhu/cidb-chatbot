@@ -1,0 +1,115 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-cidb_chatbot}
+      POSTGRES_USER: ${DB_USERNAME:-cidb_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # Baseline schema + reference data. Postgres runs these once, only when
+      # the data directory is empty; existing databases are never touched.
+      - ./docker/db/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-cidb_user} -d ${DB_DATABASE:-cidb_chatbot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  ocr:
+    build:
+      context: .
+      dockerfile: docker/ocr/Dockerfile
+    restart: unless-stopped
+    environment:
+      MAX_FILE_SIZE_MB: ${OCR_MAX_FILE_SIZE_MB:-8}
+      MIN_OCR_CONFIDENCE: ${OCR_MIN_CONFIDENCE:-0.55}
+      MIN_NAME_SIMILARITY: ${OCR_MIN_NAME_SIMILARITY:-75}
+      MANUAL_REVIEW_NAME_SCORE: ${OCR_MANUAL_REVIEW_NAME_SCORE:-60}
+    volumes:
+      # PaddleOCR model cache — keeps restarts fast and survives image rebuilds
+      - ocr-models:/root/.paddlex
+    expose:
+      - "8001"
+    networks:
+      - internal
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      ocr:
+        condition: service_started
+    environment:
+      APP_NAME: ${APP_NAME:-CIDB Chatbot}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL:?APP_URL must be set, e.g. https://chatbot.example.com}
+      APP_DISABLE_HASHING: ${APP_DISABLE_HASHING:-false}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?APP_ENCRYPTION_KEY must be set}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-cidb_chatbot}
+      DB_USERNAME: ${DB_USERNAME:-cidb_user}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+      DB_TIMEOUT: ${DB_TIMEOUT:-5}
+
+      STORAGE_PATH: /var/www/storage
+      LOG_PATH: /var/www/logs
+      UPLOAD_STORAGE_DRIVER: ${UPLOAD_STORAGE_DRIVER:-local}
+      UPLOAD_MAX_FILE_SIZE_MB: ${UPLOAD_MAX_FILE_SIZE_MB:-10}
+      SIGNATURE_MAX_FILE_SIZE_MB: ${SIGNATURE_MAX_FILE_SIZE_MB:-5}
+
+      CIMS_ENABLED: ${CIMS_ENABLED:-false}
+      CIMS_BASE_URL: ${CIMS_BASE_URL:-https://example.invalid}
+      CIMS_VERIFY_ENDPOINT: ${CIMS_VERIFY_ENDPOINT:-/api/v1/verify}
+      CIMS_TIMEOUT_MS: ${CIMS_TIMEOUT_MS:-15000}
+      CIMS_MOCK_MODE: ${CIMS_MOCK_MODE:-random}
+      CIMS_MOCK_OUTCOME: ${CIMS_MOCK_OUTCOME:-deleted}
+      CIMS_API_KEY: ${CIMS_API_KEY:-}
+      CIMS_CLIENT_ID: ${CIMS_CLIENT_ID:-}
+      CIMS_CLIENT_SECRET: ${CIMS_CLIENT_SECRET:-}
+
+      RPA_BOT_ENDPOINT: ${RPA_BOT_ENDPOINT:-}
+      RPA_BOT_API_KEY: ${RPA_BOT_API_KEY:-}
+      RPA_BOT_TIMEOUT_MS: ${RPA_BOT_TIMEOUT_MS:-15000}
+      RPA_BOT_CONNECT_TIMEOUT_MS: ${RPA_BOT_CONNECT_TIMEOUT_MS:-5000}
+      RPA_COMPANY_BOT_ENDPOINT: ${RPA_COMPANY_BOT_ENDPOINT:-}
+
+      OCR_SERVICE_BASE_URL: http://ocr:8001
+      OCR_SERVICE_VERIFY_ENDPOINT: ${OCR_SERVICE_VERIFY_ENDPOINT:-/api/verify-document}
+      OCR_SERVICE_TIMEOUT_MS: ${OCR_SERVICE_TIMEOUT_MS:-45000}
+      OCR_SERVICE_CONNECT_TIMEOUT_MS: ${OCR_SERVICE_CONNECT_TIMEOUT_MS:-5000}
+      OCR_SERVICE_RETRY_COUNT: ${OCR_SERVICE_RETRY_COUNT:-1}
+      OCR_SERVICE_API_KEY: ${OCR_SERVICE_API_KEY:-}
+
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
+    volumes:
+      - app-storage:/var/www/storage
+      - app-logs:/var/www/logs
+    # Internal port only — Dokploy/Traefik handles the public domain and TLS.
+    expose:
+      - "80"
+    networks:
+      - internal
+      - dokploy-network
+
+volumes:
+  db-data:
+  app-storage:
+  app-logs:
+  ocr-models:
+
+networks:
+  internal:
+  dokploy-network:
+    external: true

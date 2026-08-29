@@ -1,5 +1,25 @@
-//const API_BASE_URL = window.location.origin;
-const API_BASE_URL = 'http://localhost:8000';
+// API base resolution:
+//   1. window.CIDB_API_BASE_URL, if a host page sets it before this script loads
+//   2. same origin, when the page is served by the backend (the Docker setup)
+//   3. http://localhost:8000, for local dev where the page is opened from disk
+//      or from a separate static server (Live Server on 5500, Vite on 5173, ...)
+const API_BASE_URL = (function resolveApiBaseUrl() {
+  if (typeof window !== 'undefined' && window.CIDB_API_BASE_URL) {
+    return window.CIDB_API_BASE_URL;
+  }
+
+  const DEV_STATIC_PORTS = ['3000', '5173', '5500'];
+
+  if (
+    typeof window === 'undefined' ||
+    window.location.protocol === 'file:' ||
+    DEV_STATIC_PORTS.includes(window.location.port)
+  ) {
+    return 'http://localhost:8000';
+  }
+
+  return window.location.origin;
+})();
 const WORKFLOW_CODE = 'CIDB_EMAIL_ID_CANCELLATION';
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const FILE_POLICY = {

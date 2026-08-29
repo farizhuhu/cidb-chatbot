@@ -1,0 +1,22 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.docker.example
+
+# local runtime artefacts
+vendor/
+ocr/.venv/
+ocr/**/__pycache__/
+ocr/ocr_service.log
+backend/logs/
+backend/storage/documents/
+backend/uploads/
+backend/public/backend/
+
+# docs / reference material not needed in the image
+*.pdf
+docs/
+*.md
+backend/*.md
+ocr/README.md
