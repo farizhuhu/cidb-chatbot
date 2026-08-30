@@ -72,6 +72,43 @@ On first boot the stack sets itself up with no manual steps:
 Verify: `https://your-domain/health.php` returns `{"status":"ok",...}`, and
 `https://your-domain/faq/topics` returns FAQ topics from the database.
 
+## When the baseline schema changes
+
+`docker/db/initdb/*.sql` runs **only against an empty data directory**. If those
+files change, an already-deployed stack keeps its old schema — redeploying is not
+enough. Recreate the database volume:
+
+```bash
+docker compose down -v && docker compose up -d
+```
+
+In Dokploy, delete the Compose service's `db-data` volume before redeploying.
+This destroys all data, so only do it while the deployment is still disposable.
+
+## Schema provenance — read this before trusting the baseline
+
+`001_baseline_schema.sql` was extracted from section 11 of
+`BACKEND_DATABASE_DESIGN.md`, which is a **design document, not a dump of a
+working database**. It has already been found to diverge from the code:
+
+- `chatbot_applicants` specified `full_name_ciphertext` / `full_name_hash` /
+  `identity_number_ciphertext` / `identity_number_hash`. That encryption design
+  was never implemented — the code writes plaintext `full_name` and
+  `identity_number`, so the identity step failed with `column "full_name" does
+  not exist`.
+- `cims_verification_results` was missing `retry_available` and
+  `display_message`, both written by `VerificationService`.
+
+Every `insert()` / `update()` payload and every repository read path has since
+been checked mechanically against the live schema, and they now agree. But the
+column types and constraints for the corrected columns are inferred from usage,
+not from a real database. If a working CIDB database exists anywhere, diff it
+against this file and prefer its definitions:
+
+```bash
+pg_dump --schema-only --no-owner --no-privileges <db> > real-schema.sql
+```
+
 ## Using an existing database
 
 If you already run a PostgreSQL instance with this schema:

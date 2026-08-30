@@ -183,11 +183,15 @@ CREATE INDEX idx_chatbot_sessions_started_at ON chatbot_sessions (started_at);
 CREATE TABLE chatbot_applicants (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id uuid NOT NULL UNIQUE REFERENCES chatbot_sessions(id) ON DELETE CASCADE ON UPDATE CASCADE,
-    full_name_ciphertext bytea NOT NULL,
-    full_name_hash char(64) NOT NULL,
+    -- The design doc specified full_name_ciphertext / full_name_hash /
+    -- identity_number_ciphertext / identity_number_hash. That encryption design
+    -- was never implemented: ApplicantService writes plaintext `full_name` and
+    -- `identity_number` (see ApplicantService::updateIdentityFromSession), and
+    -- ChatbotApplicantRepository::findByIdentityNumber queries `identity_number`
+    -- directly. The columns below match the code.
+    full_name text NOT NULL,
     identity_type varchar(20) NOT NULL,
-    identity_number_ciphertext bytea NOT NULL,
-    identity_number_hash char(64) NOT NULL,
+    identity_number text NOT NULL,
     identity_number_last4 varchar(4),
     state_code varchar(10) NOT NULL REFERENCES reference_malaysian_states(state_code) ON DELETE RESTRICT ON UPDATE CASCADE,
     language_code varchar(10) NOT NULL REFERENCES reference_languages(code) ON DELETE RESTRICT ON UPDATE CASCADE,
@@ -197,11 +201,10 @@ CREATE TABLE chatbot_applicants (
     updated_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT ck_chatbot_applicants_identity_type CHECK (identity_type IN ('MYKAD', 'PASSPORT')),
     CONSTRAINT ck_chatbot_applicants_verification_status CHECK (verification_status IN ('pending', 'verified', 'rejected')),
-    CONSTRAINT ck_chatbot_applicants_identity_hash_length CHECK (length(full_name_hash) = 64 AND length(identity_number_hash) = 64),
     CONSTRAINT ck_chatbot_applicants_last4 CHECK (identity_number_last4 IS NULL OR identity_number_last4 ~ '^[A-Z0-9]{4}$')
 );
 
-CREATE INDEX idx_chatbot_applicants_identity_number_hash ON chatbot_applicants (identity_number_hash);
+CREATE INDEX idx_chatbot_applicants_identity_number ON chatbot_applicants (identity_number);
 CREATE INDEX idx_chatbot_applicants_state_code ON chatbot_applicants (state_code);
 CREATE INDEX idx_chatbot_applicants_language_code ON chatbot_applicants (language_code);
 CREATE INDEX idx_chatbot_applicants_verification_status ON chatbot_applicants (verification_status);
@@ -318,6 +321,9 @@ CREATE TABLE cims_verification_results (
     response_message text,
     external_reference_no varchar(80),
     latency_ms integer,
+    -- Written by VerificationService but absent from the design doc's DDL.
+    retry_available boolean NOT NULL DEFAULT false,
+    display_message text,
     response_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
     verified_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
