@@ -72,18 +72,17 @@ On first boot the stack sets itself up with no manual steps:
 Verify: `https://your-domain/health.php` returns `{"status":"ok",...}`, and
 `https://your-domain/faq/topics` returns FAQ topics from the database.
 
-## When the baseline schema changes
+## Changing the schema
 
-`docker/db/initdb/*.sql` runs **only against an empty data directory**. If those
-files change, an already-deployed stack keeps its old schema — redeploying is not
-enough. Recreate the database volume:
+`docker/db/initdb/*.sql` runs **only against an empty data directory**, so it
+only ever shapes brand-new databases. Editing those files does nothing to a
+running deployment.
 
-```bash
-docker compose down -v && docker compose up -d
-```
-
-In Dokploy, delete the Compose service's `db-data` volume before redeploying.
-This destroys all data, so only do it while the deployment is still disposable.
+Any schema change that must reach an existing database belongs in
+`backend/migrations/`. The app entrypoint runs pending migrations on every
+container start, so a plain redeploy applies them — no volume deletion, no data
+loss. Keep both in step: new databases get the schema from `initdb`, existing
+ones get there via migrations, and the two must end up identical.
 
 ## Schema provenance — read this before trusting the baseline
 
