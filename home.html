@@ -198,14 +198,13 @@
     border-bottom-left-radius: 4px;
     border: 1px solid rgba(255,255,255,0.8);
     padding: 12px 16px;
-    text-align: justify;
-    text-justify: inter-word;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    text-align: left;
+    overflow-wrap: break-word;
   }
   .msg.user { background: var(--chat-user); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
   .msg.error{ background: var(--chat-error-bg); color: var(--chat-error-text); align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid var(--chat-error-border); }
   .info-box  { background: var(--chat-info-bg); border: 1px solid var(--chat-info-border); border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: 13px; }
+  .faq-customer-info-box { padding: 7px 10px; margin-top: 6px; line-height: 1.4; }
   .warn-box  { background: var(--chat-warning-bg); border: 1px solid var(--chat-warning-border); border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: 13px; }
   .upload-example-section {
     margin-top: 10px;
@@ -722,7 +721,7 @@
   .assistance-submit-btn:hover:not(:disabled) { background: var(--chat-primary-dark); }
   .assistance-submit-btn:disabled { background: #a7b9bb; cursor: default; }
   /* Signature pad modal */
-  .sig-overlay { display: none; position: fixed; inset: 0; background: var(--chat-overlay); z-index: 999; align-items: flex-end; justify-content: center; padding-bottom: 0; }
+  .sig-overlay { display: none; position: absolute; inset: 0; background: var(--chat-overlay); z-index: 999; align-items: flex-end; justify-content: center; padding-bottom: 0; }
   .sig-overlay.open { display: flex; }
   .sig-modal { background: #fff; border-radius: 18px 18px 0 0; padding: 20px 18px 28px; width: 100%; max-width: 460px; box-shadow: 0 -6px 30px rgba(15, 29, 31, 0.18); display: flex; flex-direction: column; gap: 12px; animation: slideUp 0.22s ease; }
   @keyframes slideUp { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -1077,8 +1076,6 @@ Edit Name and IC Number
 </div>
 </div>
 </div>
-</div>
- 
 <!-- Signature pad modal -->
 <div class="sig-overlay" id="sigOverlay">
 <div class="sig-modal">
@@ -1097,6 +1094,7 @@ Edit Name and IC Number
 <button class="sig-btn-upload" id="sigUploadBtn" onclick="document.getElementById('sigFileInput').click()">Upload signature image instead (JPG / PNG)</button>
 <input type="file" id="sigFileInput" accept="image/jpeg,image/jpg,image/png" style="display:none" onchange="sigFileUploaded()">
 <div class="sig-cancel" id="sigCancelLink" onclick="closeSigPad()">Cancel / Batal</div>
+</div>
 </div>
 </div>
 

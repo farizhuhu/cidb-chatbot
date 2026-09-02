@@ -29,6 +29,8 @@ const FILE_POLICY = {
 const MY_STATES = ['Johor', 'Kedah', 'Kelantan', 'Melaka', 'Negeri Sembilan', 'Pahang', 'Perak', 'Perlis',
   'Pulau Pinang', 'Sabah', 'Sarawak', 'Selangor', 'Terengganu',
   'W.P. Kuala Lumpur', 'W.P. Labuan', 'W.P. Putrajaya'];
+const PRIORITY_STATE_ORDER = ['Selangor', 'Johor', 'W.P. Kuala Lumpur', 'Sarawak', 'Pulau Pinang'];
+const PRIORITY_STATE_SET = new Set(PRIORITY_STATE_ORDER);
 
 const messagesEl = document.getElementById('chatMessages');
 const chatWrapperEl = document.querySelector('.chat-wrapper');
@@ -85,23 +87,9 @@ const retryEditCompanyReason = document.getElementById('retryEditCompanyReason')
 
 const FILE_SLOTS = ['front', 'back', 'certificate'];
 const SLOT_DOC_TYPES = { front: 'IC_FRONT', back: 'IC_BACK', certificate: 'SSM_PPK_CERTIFICATE' };
-const WAIT_MESSAGE_INTERVAL_MS = 2400;
 const FINAL_VERIFICATION_TIMEOUT_MS = 10 * 60 * 1000;
 const DEBUG_RPA_FLOW = true;
 const SUBMISSION_CONTEXT_STORAGE_KEY = 'cidb_submission_context';
-const WAIT_MESSAGES = {
-  en: [
-    'Thank you for waiting. We are checking your details now...',
-    'We are still verifying your information. Please stay with us...',
-    'Almost there. Your request is still being processed...',
-  ],
-  ms: [
-    'Terima kasih kerana menunggu. Kami sedang menyemak maklumat anda sekarang...',
-    'Kami masih mengesahkan maklumat anda. Sila terus bersama kami...',
-    'Hampir selesai. Permohonan anda masih diproses...',
-  ],
-};
-
 let liveAgentDockResizeObserver = null;
 
 const SUBMISSION_HOLD_MESSAGE = {
@@ -116,7 +104,7 @@ const SERVICE_OPTIONS = {
     { value: 'faq', label: '3. PPK/SPKK/STB Renewal Process' },
   ],
   ms: [
-    { value: 'individual', label: '1. Pembatalan Email ID Individu' },
+    { value: 'individual', label: '1. Pembatalan Email IC Individu' },
     { value: 'company', label: '2. Pembatalan Email ID Syarikat' },
     { value: 'faq', label: '3. Proses Pembaharuan PPK/SPKK/STB' },
   ],
@@ -549,7 +537,7 @@ function fillRetryEditStateOptions() {
     blankOption.value = '';
     blankOption.textContent = state.en ? 'Select state' : 'Pilih negeri';
     select.appendChild(blankOption);
-    MY_STATES.forEach(item => {
+    getStateSelectionOptions().forEach(item => {
       const option = document.createElement('option');
       option.value = item;
       option.textContent = item;
@@ -958,39 +946,14 @@ function sanitizeBotHtml(html) {
 }
 
 function renderBotRichMessage(message) {
-  return sanitizeBotHtml(String(message || ''));
+  return sanitizeBotHtml(String(message || '').replace(/\bRPA\b\s*/gi, ''));
 }
 
 function startWaitMessageSequence(en) {
-  const messages = en ? WAIT_MESSAGES.en : WAIT_MESSAGES.ms;
-  const bubble = document.createElement('div');
-  bubble.className = 'msg bot wait-message';
-  let index = 0;
-  let stopped = false;
-
-  const renderCurrent = () => {
-    bubble.innerHTML = renderBackendMessage(messages[index]);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  };
-
-  renderCurrent();
-  messagesEl.appendChild(bubble);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-
-  const timer = setInterval(() => {
-    if (stopped) return;
-    index = (index + 1) % messages.length;
-    renderCurrent();
-  }, WAIT_MESSAGE_INTERVAL_MS);
-
+  const typingBubble = startTypingBubble();
   return {
     stop() {
-      if (stopped) {
-        return;
-      }
-      stopped = true;
-      clearInterval(timer);
-      bubble.remove();
+      typingBubble.stop();
     },
   };
 }
@@ -1072,6 +1035,7 @@ function startTypingBubble() {
 
   let stopped = false;
   return {
+    bubble,
     stop() {
       if (stopped) {
         return;
@@ -1829,6 +1793,12 @@ function isRenewalFaqQuery(text) {
   ].some(keyword => value.includes(keyword));
 }
 
+function getStateSelectionOptions() {
+  const priorityStates = PRIORITY_STATE_ORDER.filter(item => MY_STATES.includes(item));
+  const remainingStates = MY_STATES.filter(item => !PRIORITY_STATE_SET.has(item));
+  return [...priorityStates, ...remainingStates];
+}
+
 function getServiceQuickReplies() {
   return state.en ? SERVICE_OPTIONS.en : SERVICE_OPTIONS.ms;
 }
@@ -1934,8 +1904,8 @@ async function startFaqCustomerInfoCollection() {
   state.step = 'ask_faq_customer_name';
   await showTyping(400);
   await addMsg(state.en
-    ? 'To help us assist you more accurately, please provide the following information:<div class="info-box">1. Full Name<br>2. Phone Number<br>3. State<br>4. Applicant Category (Individual / Company)<br>5. Personal Email<br>6. Company Email (required if Applicant Category = Company)</div>'
-    : 'Untuk membantu kami membantu anda dengan lebih tepat, sila berikan maklumat berikut:<div class="info-box">1. Nama Penuh<br>2. Nombor Telefon<br>3. Negeri<br>4. Kategori Pemohon (Individu / Syarikat)<br>5. Emel Peribadi<br>6. Emel Syarikat (diperlukan jika Kategori Pemohon = Syarikat)</div>');
+    ? 'To help us assist you more accurately, please provide the following information:<div class="info-box faq-customer-info-box">1. Full Name<br>2. Phone Number<br>3. State</div>'
+    : 'Untuk membantu kami membantu anda dengan lebih tepat, sila berikan maklumat berikut:<div class="info-box faq-customer-info-box">1. Nama Penuh<br>2. Nombor Telefon<br>3. Negeri</div>');
   await showTyping(450);
   await addMsg(state.en ? 'May I have your <strong>full name</strong> please?' : 'Boleh saya dapatkan <strong>nama penuh</strong> anda?');
   setInput(true);
@@ -2062,10 +2032,13 @@ let assistanceFormIdCounter = 0;
 // Bahasa Malaysia dropdown strings, so these are stored/sent verbatim in BM regardless
 // of the chat language. Single option each for now; add more entries to expand.
 const ASSISTANCE_CLASSIFICATION_OPTIONS = {
-  cases_category: ['Pertanyaan'],
+  cases_category: ['Bantuan'],
   sub_category_1: ['Pendaftaran Kontraktor'],
-  sub_category_2: ['Prosedur pembaharuan PPK/SPKK/STB'],
+  sub_category_2: ['Masalah Teknikal'],
 };
+
+// Renewal type sent to the RPA bot as sCustomerType. Codes only, no translation.
+const ASSISTANCE_TOPIC_OPTIONS = ['PPK', 'SPKK', 'STB'];
 
 function assistanceOptionListHtml(values, selectedValue = values[0]) {
   return values.map(value => {
@@ -2091,6 +2064,7 @@ function renderAssistanceForm() {
     phone: 'Mobile Number',
     email: 'Email Address',
     enquiryTitle: 'Enquiry Title',
+    topic: 'Renewal Type',
     enquiryDescription: 'Enquiry Description',
     idNumber: 'MyKad / Passport No.',
     companyName: 'Company Name',
@@ -2116,6 +2090,7 @@ function renderAssistanceForm() {
     phone: 'No. Telefon Bimbit',
     email: 'Alamat E-mel',
     enquiryTitle: 'Tajuk Maklumbalas',
+    topic: 'Jenis Pembaharuan',
     enquiryDescription: 'Huraian Maklumbalas',
     idNumber: 'No. MyKad / Pasport',
     companyName: 'Nama Syarikat',
@@ -2132,16 +2107,22 @@ function renderAssistanceForm() {
   };
 
   const stateOptionsHtml = `<option value="">${escapeHtml(labels.selectPlaceholder)}</option>`
-    + MY_STATES.map(item => {
+    + getStateSelectionOptions().map(item => {
       const selected = item === (state.stateName || '') ? ' selected' : '';
       return `<option value="${escapeHtml(item)}"${selected}>${escapeHtml(item)}</option>`;
     }).join('');
 
   const categoryOptionsHtml = ['individual', 'company'].map(value => {
-    const selected = value === state.faqApplicantCategory ? ' selected' : '';
+    const selected = value === (state.faqApplicantCategory || 'company') ? ' selected' : '';
     const text = value === 'company' ? labels.company : labels.individual;
     return `<option value="${value}"${selected}>${escapeHtml(text)}</option>`;
   }).join('');
+
+  const topicOptionsHtml = `<option value="">${escapeHtml(labels.selectPlaceholder)}</option>`
+    + ASSISTANCE_TOPIC_OPTIONS.map(code => {
+      const selected = code === (state.faqTopicCode || '') ? ' selected' : '';
+      return `<option value="${escapeHtml(code)}"${selected}>${escapeHtml(code)}</option>`;
+    }).join('');
 
   const docSlotsHtml = [1, 2, 3].map(n => `<label>${escapeHtml(labels.document)} #${n} (${escapeHtml(labels.optional)})
       <input type="file" id="${formId}-doc-${n}" />
@@ -2153,6 +2134,9 @@ function renderAssistanceForm() {
     <h5>${escapeHtml(labels.sectionFeedback)}</h5>
     <label>${escapeHtml(labels.enquiryTitle)}
       <input type="text" id="${formId}-enquiry-title" value="${escapeHtml(state.faqEnquiryTitle || '')}" />
+    </label>
+    <label>${escapeHtml(labels.topic)}
+      <select id="${formId}-topic">${topicOptionsHtml}</select>
     </label>
     <label>${escapeHtml(labels.state)}
       <select id="${formId}-state">${stateOptionsHtml}</select>
@@ -2226,6 +2210,7 @@ async function submitAssistanceForm(formId) {
   const getValue = (suffix) => String(document.getElementById(`${formId}-${suffix}`)?.value || '').trim();
 
   const enquiryTitle = getValue('enquiry-title');
+  const topicCode = getValue('topic');
   const stateName = getValue('state');
   const description = getValue('description');
   const customerName = getValue('customer-name');
@@ -2240,10 +2225,29 @@ async function submitAssistanceForm(formId) {
   const subCategory1 = getValue('sub-category-1');
   const subCategory2 = getValue('sub-category-2');
 
-  if (!enquiryTitle || !stateName || !description || !customerName || !idNumber
-    || !phone || !email || !casesCategory || !subCategory1 || !subCategory2
-    || (isCompany && (!companyName || !companyRegNo))) {
-    await showApiError({ message: state.en ? 'Please complete all required fields.' : 'Sila lengkapkan semua medan yang diperlukan.' });
+  const requiredFields = [
+    [enquiryTitle, state.en ? 'Enquiry Title' : 'Tajuk Maklumbalas'],
+    [topicCode, state.en ? 'Renewal Type' : 'Jenis Pembaharuan'],
+    [stateName, state.en ? 'State Involved' : 'Negeri Terlibat'],
+    [description, state.en ? 'Enquiry Description' : 'Huraian Maklumbalas'],
+    [customerName, state.en ? 'Name' : 'Nama'],
+    [idNumber, state.en ? 'MyKad / Passport No.' : 'No. MyKad / Pasport'],
+    [phone, state.en ? 'Mobile Number' : 'No. Telefon Bimbit'],
+    [email, state.en ? 'Email Address' : 'Alamat E-mel'],
+    [casesCategory, state.en ? 'Cases Category' : 'Kategori Kes'],
+    [subCategory1, state.en ? 'Sub Category Level 1' : 'Sub Kategori Tahap 1'],
+    [subCategory2, state.en ? 'Sub Category Level 2' : 'Sub Kategori Tahap 2'],
+  ];
+  if (isCompany) {
+    requiredFields.push([companyName, state.en ? 'Company Name' : 'Nama Syarikat']);
+    requiredFields.push([companyRegNo, state.en ? 'Company Registration No.' : 'No. Pendaftaran Syarikat']);
+  }
+
+  const missing = requiredFields.filter(([value]) => !value).map(([, label]) => label);
+  if (missing.length) {
+    await showApiError({
+      message: (state.en ? 'Please complete: ' : 'Sila lengkapkan: ') + missing.join(', '),
+    });
     return;
   }
   if (!buildEmailPayload(email) || !buildMobilePayload(phone)) {
@@ -2273,6 +2277,8 @@ async function submitAssistanceForm(formId) {
         state: stateName,
         customer_name: customerName,
         applicant_category: applicantCategory,
+        topic_code: topicCode,
+        language_code: state.languageCode || (state.en ? 'en' : 'ms'),
         phone,
         email,
         enquiry_title: enquiryTitle,
@@ -2879,7 +2885,7 @@ async function handleStep(text) {
       await addMsg(state.en
         ? 'Before we begin, may I know which <strong>state</strong> you are contacting us from?'
         : 'Sebelum kita mulakan, bolehkah saya tahu dari <strong>negeri</strong> mana anda menghubungi kami?');
-      setQR(MY_STATES);
+      setQR(getStateSelectionOptions());
       setInput(true);
       await refreshSession();
       return;
@@ -2942,7 +2948,7 @@ async function handleStep(text) {
     state.step = 'ask_faq_customer_state';
     await showTyping(400);
     await addMsg(state.en ? 'Which <strong>state</strong> are you contacting us from?' : 'Dari <strong>negeri</strong> manakah anda menghubungi kami?');
-    setQR(MY_STATES);
+    setQR(getStateSelectionOptions());
     setInput(true);
     return;
   }
@@ -2952,65 +2958,26 @@ async function handleStep(text) {
     if (!payload) {
       await showApiError({ message: 'Invalid Malaysian state selected.', errors: { state: 'Please choose a valid Malaysian state.' } }, 'Invalid Malaysian state selected.');
       await addMsg(state.en ? 'Which <strong>state</strong> are you contacting us from?' : 'Dari <strong>negeri</strong> manakah anda menghubungi kami?');
-      setQR(MY_STATES);
+      setQR(getStateSelectionOptions());
       setInput(true);
       return;
     }
     state.stateName = payload.state;
-    state.step = 'ask_faq_customer_category';
-    await showTyping(400);
-    await addMsg(state.en ? 'Are you enquiring as an <strong>Individual</strong> or a <strong>Company</strong>?' : 'Adakah anda membuat pertanyaan sebagai <strong>Individu</strong> atau <strong>Syarikat</strong>?');
-    setQR(faqApplicantCategoryOptions());
-    setInput(true);
+    await finishFaqCustomerInfoCollection();
     return;
   }
 
   if (state.step === 'ask_faq_customer_category') {
-    const payload = buildFaqApplicantCategoryPayload(text);
-    if (!payload) {
-      await showApiError({ message: 'Invalid applicant category.', errors: { applicant_category: 'Please choose Individual or Company.' } }, 'Invalid applicant category.');
-      await addMsg(state.en ? 'Are you enquiring as an <strong>Individual</strong> or a <strong>Company</strong>?' : 'Adakah anda membuat pertanyaan sebagai <strong>Individu</strong> atau <strong>Syarikat</strong>?');
-      setQR(faqApplicantCategoryOptions());
-      setInput(true);
-      return;
-    }
-    state.faqApplicantCategory = payload.category;
-    state.step = 'ask_faq_customer_email';
-    await showTyping(400);
-    await addMsg(state.en ? 'Please provide your <strong>personal email address</strong>.' : 'Sila berikan <strong>alamat emel peribadi</strong> anda.');
-    setInput(true);
+    await finishFaqCustomerInfoCollection();
     return;
   }
 
   if (state.step === 'ask_faq_customer_email') {
-    const payload = buildEmailPayload(text);
-    if (!payload) {
-      await showApiError({ message: 'Invalid email address.', errors: { email: 'Enter a valid email address.' } }, 'Invalid email address.');
-      await addMsg(state.en ? 'Please provide a valid <strong>personal email address</strong>.' : 'Sila berikan <strong>alamat emel peribadi</strong> yang sah.');
-      setInput(true);
-      return;
-    }
-    state.email = payload.email;
-    if (state.faqApplicantCategory === 'company') {
-      state.step = 'ask_faq_customer_company_email';
-      await showTyping(400);
-      await addMsg(state.en ? 'Please provide the <strong>company email address</strong>.' : 'Sila berikan <strong>alamat emel syarikat</strong>.');
-      setInput(true);
-      return;
-    }
     await finishFaqCustomerInfoCollection();
     return;
   }
 
   if (state.step === 'ask_faq_customer_company_email') {
-    const payload = buildEmailPayload(text);
-    if (!payload) {
-      await showApiError({ message: 'Invalid company email address.', errors: { company_email: 'Enter a valid email address.' } }, 'Invalid company email address.');
-      await addMsg(state.en ? 'Please provide a valid <strong>company email address</strong>.' : 'Sila berikan <strong>alamat emel syarikat</strong> yang sah.');
-      setInput(true);
-      return;
-    }
-    state.companyEmail = payload.email;
     await finishFaqCustomerInfoCollection();
     return;
   }
@@ -3020,7 +2987,7 @@ async function handleStep(text) {
     if (!payload) {
       await showApiError({ message: 'Invalid Malaysian state selected.', errors: { state: 'Please choose a valid Malaysian state.' } }, 'Invalid Malaysian state selected.');
       await addMsg(state.en ? 'Before we continue, may I know which <strong>state</strong> you are contacting us from?' : 'Sebelum kita teruskan, bolehkah saya tahu dari <strong>negeri</strong> mana anda menghubungi kami?');
-      setQR(MY_STATES);
+      setQR(getStateSelectionOptions());
       setInput(true);
       return;
     }
@@ -3034,8 +3001,8 @@ async function handleStep(text) {
       await addMsg(state.en ? `You are contacting us from <strong>${escapeHtml(payload.state)}</strong>.` : `Terima kasih! Anda menghubungi kami dari <strong>${escapeHtml(payload.state)}</strong>.`);
       await showTyping(650);
       await addMsg(state.en
-        ? 'To proceed with your <strong>Email ID Cancellation</strong> request, please provide the following:<div class="info-box">1. Full name (as per IC / Passport)<br>2. IC / Passport number<br>3. Mobile number<br>4. Email address<br>5. Identity document and signature after we collect your contact details</div>'
-        : 'Untuk meneruskan permohonan <strong>Pembatalan Email ID</strong> anda, sila sediakan maklumat berikut:<div class="info-box">1. Nama penuh (seperti dalam IC / Pasport)<br>2. Nombor IC / Pasport<br>3. Nombor telefon bimbit<br>4. Alamat emel<br>5. Dokumen pengenalan dan tandatangan selepas kami mengumpul maklumat hubungan anda</div>');
+        ? 'To proceed with your <strong>Individual Email ID Cancellation</strong> request, please provide the following:<div class="info-box">1. Full name (as per IC / Passport)<br>2. IC / Passport number<br>3. Mobile number<br>4. Email address<br>5. Identity document and signature after we collect your contact details</div>'
+        : 'Untuk meneruskan permohonan <strong>Pembatalan Email ID Individu</strong> anda, sila sediakan maklumat berikut:<div class="info-box">1. Nama penuh (seperti dalam IC / Pasport)<br>2. Nombor IC / Pasport<br>3. Nombor telefon bimbit<br>4. Alamat emel<br>5. Dokumen pengenalan dan tandatangan selepas kami mengumpul maklumat hubungan anda</div>');
       await showTyping(450);
       await addMsg(state.en ? 'May I have your <strong>full name</strong> please?' : 'Boleh saya dapatkan <strong>nama penuh</strong> anda?');
       setInput(true);
@@ -3044,7 +3011,7 @@ async function handleStep(text) {
     } catch (error) {
       await showApiError(error, 'Unable to save state.');
       await addMsg(state.en ? 'Before we continue, may I know which <strong>state</strong> you are contacting us from?' : 'Sebelum kita teruskan, bolehkah saya tahu dari <strong>negeri</strong> mana anda menghubungi kami?');
-      setQR(MY_STATES);
+      setQR(getStateSelectionOptions());
       setInput(true);
       return;
     }
@@ -3150,9 +3117,9 @@ async function handleStep(text) {
       state.step = 'ask_company_state';
       await showTyping(450);
       await addMsg(state.en
-        ? 'Please provide the <strong>company state</strong> for RPA verification.'
-        : 'Sila berikan <strong>negeri syarikat</strong> untuk pengesahan RPA.');
-      setQR(MY_STATES);
+        ? 'Please provide the <strong>company state</strong> for verification.'
+        : 'Sila berikan <strong>negeri syarikat</strong> untuk semakan.');
+      setQR(getStateSelectionOptions());
       setInput(true);
       await refreshSession();
       return;
@@ -3169,9 +3136,9 @@ async function handleStep(text) {
     if (!payload) {
       await showApiError({ message: 'Invalid Malaysian state selected.', errors: { state: 'Please choose a valid Malaysian state.' } }, 'Invalid Malaysian state selected.');
       await addMsg(state.en
-        ? 'Please provide the <strong>company state</strong> for RPA verification.'
-        : 'Sila berikan <strong>negeri syarikat</strong> untuk pengesahan RPA.');
-      setQR(MY_STATES);
+        ? 'Please provide the <strong>company state</strong> for verification.'
+        : 'Sila berikan <strong>negeri syarikat</strong> untuk semakan.');
+      setQR(getStateSelectionOptions());
       setInput(true);
       return;
     }
@@ -3189,8 +3156,8 @@ async function handleStep(text) {
     } catch (error) {
       await showApiError(error, 'Unable to save company state.');
       await addMsg(state.en
-        ? 'Please provide the <strong>company state</strong> for RPA verification.'
-        : 'Sila berikan <strong>negeri syarikat</strong> untuk pengesahan RPA.');
+        ? 'Please provide the <strong>company state</strong> for verification.'
+        : 'Sila berikan <strong>negeri syarikat</strong> untuk semakan.');
       setInput(true);
       return;
     }
