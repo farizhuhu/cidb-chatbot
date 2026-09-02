@@ -955,6 +955,9 @@
   }
   .retry-edit-btn-primary:hover:not(:disabled) { background: var(--chat-primary-dark); }
   .retry-edit-btn-primary:disabled { background: #a7b9bb; cursor: default; }
+  /* Let the ElevenLabs widget own its own placement/z-index; only hide it while the
+     text chat is open so the two widgets don't overlap. */
+  body.chat-widget-open elevenlabs-convai { display: none; }
 </style>
 </head>
 <body>
@@ -1191,5 +1194,8 @@ Edit Name and IC Number
 </div>
  
 <script src="frontend_api.js"></script>
+<!-- ElevenLabs Conversational AI voice widget -->
+<elevenlabs-convai agent-id="agent_6101m0xvns9eepe82r6jg9enepa7" placement="bottom-left"></elevenlabs-convai>
+<script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
 </body>
 </html>
