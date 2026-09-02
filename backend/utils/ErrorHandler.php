@@ -31,11 +31,17 @@ final class ErrorHandler
         $statusCode = 500;
         $errorCode = 'SERVER_ERROR';
         $errors = [];
+        // AppException messages are written by this application for the person
+        // using it ("MyKad must contain exactly 12 digits."), so they are safe
+        // to show in production. Only genuinely unexpected throwables — whose
+        // messages can carry SQL, paths or other internals — get masked.
+        $isSafeMessage = false;
 
         if ($throwable instanceof AppException) {
             $statusCode = $throwable->statusCode();
             $errorCode = $throwable->errorCode();
             $errors = $throwable->errors();
+            $isSafeMessage = $statusCode < 500;
         }
 
         $this->logger->error($throwable->getMessage(), [
@@ -45,7 +51,7 @@ final class ErrorHandler
         ]);
 
         $payload = JsonResponse::error(
-            $this->debug ? $throwable->getMessage() : 'An unexpected error occurred.',
+            $this->debug || $isSafeMessage ? $throwable->getMessage() : 'An unexpected error occurred.',
             $errors,
             $statusCode,
             $errorCode
